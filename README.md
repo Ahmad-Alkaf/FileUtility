@@ -11,21 +11,34 @@ A robust file and directory manipulation library with async/await support, autom
 - **Path Aliasing**: Multiple path representations for a single file/directory
 - **Deep Operations**: Automatic nested directory creation
 
-## Usage
+## Usage Sample
 
-### Directory Operations
-```csharp
+```c#
 // Create a directory object.
-var parentDir = ADirectory.FromFullPath(@"C:\base");
+ADirectory parentDir = ADirectory.FromFullPath(@"C:\path\to\a\directory");
 // Concatenate the `parentDir` with a new directory with two possible names.
-var childDir = parentDir.CDirectory("subfolder", new string[] {"alias1", "alias2"});
+ADirectory childDir = parentDir.CDirectory("subfolder", new string[] {"alias1", "alias2"});
 // Create the `childDir` on the disk.
 await childDir.Create(); // Will use `alias1` name; it's the first name on its alias names.
+
+// Create a file inside `childDir` directory
+AFile file = childDir.CFile("filename.txt");
+// Write text into a file
+await file.WriteAllText("hello");
+// Copy file to another directory (e.g., `parentDir`).
+await file.CopyTo(new AFile(parentDir, "filename.txt"));
+// Check if a file exists on the disk.
+bool isFileExists = await file.Exists(); // Checks name alias if first name doesn't exist
+// Read text from a file
+string content = await file.ReadAllText();
+// Or
+List<string> lines = await file.ReadAllLines();
+
+// Delete to Recycle Bin.
+await childDir.Delete(recycleBin: true); // Default is `false`
 
 // Array of files inside the `childDir`.
 List<string> files = await childDir.GetFilesPaths(); // Absolute path
 // Array of directories inside the `childDir`.
-var directories = await childDir.GetDirectoriesPath();
+List<string> directories = await childDir.GetDirectoriesPath();
 
-// Delete to Recycle Bin.
-await childDir.Delete(recycleBin: true); // Default is `false`
