@@ -49,7 +49,7 @@ namespace FileUtility {
 
         /// <returns>string of the existed path (if any; iterate alias paths if one exist then return it), if path doesn't exist return the default path Path.Combine(parentPath, Name).</returns>
         public async Task<string> Path() {
-            string p = await PathIfExist();
+            string p = await PathIfExists();
             return p is string path ?
                 path
                 : (Parent == null ?
@@ -73,7 +73,7 @@ namespace FileUtility {
                 System.IO.Path.Combine(Parent.PathSync(), Name);
         }
         /// <returns>String of the path if exists. Otherwise null.</returns>
-        public Task<string> PathIfExist() => Task.Run(async () => {
+        public Task<string> PathIfExists() => Task.Run(async () => {
             foreach(string path in await Paths(this)) {
                 if(this is AFile ? await FileAsync.Exists(path) : await DirectoryAsync.Exists(path))
                     return path;

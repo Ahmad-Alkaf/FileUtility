@@ -80,7 +80,7 @@ namespace FileUtility {
 
 
     public override async Task Delete(bool recycleBin = false) {
-      if(await PathIfExist() is string path) {
+      if(await PathIfExists() is string path) {
         if(recycleBin) {
           await Task.Run(() => {
             const int ssfBITBUCKET = 0xa;
@@ -133,7 +133,7 @@ namespace FileUtility {
     /// </summary>
     /// <returns>True if launched succeeded. False otherwise.</returns>
     public async Task<bool> LaunchExplorer() {
-      if(await PathIfExist() is string path) {
+      if(await PathIfExists() is string path) {
         var p = new Process();
         p.StartInfo.FileName = "explorer.exe";// e.g "notepad.exe";
         p.StartInfo.UseShellExecute = true;

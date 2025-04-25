@@ -49,11 +49,13 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Extension.cs" />
     <Compile Include="TestHelper.cs" />
     <Compile Include="TestAFile.cs" />
     <Compile Include="TestADirectory.cs" />
     <Compile Include="Act.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TestUtil.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

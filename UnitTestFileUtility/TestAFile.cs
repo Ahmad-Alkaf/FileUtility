@@ -56,12 +56,38 @@ namespace UnitTestFileUtility {
         Assert.IsFalse(await fileY.Exists());
         Assert.IsTrue(await fileX.CopyTo(fileY));
         Assert.IsTrue(await fileY.Exists());
+        Assert.IsTrue(await fileX.Exists());
         Assert.IsTrue(fileY.ExistsSync());
+        Assert.IsTrue(fileX.ExistsSync());
         Assert.AreEqual("hi", await fileY.ReadAllText());
         await fileX.WriteAllText("overwrite");
         Assert.IsFalse(await fileX.CopyTo(fileY, overWrite: false));
         Assert.AreEqual("hi", await fileY.ReadAllText());
         Assert.IsTrue(await fileX.CopyTo(fileY, overWrite: true));
+        Assert.AreEqual("overwrite", await fileY.ReadAllText());
+      }
+    }
+
+    [TestMethod]
+    public async Task MoveTo() {
+      using(var act = new Act()) {
+        var parent = ADirectory.FromFullPath(act.CreateEmptyDirectory());
+        var fileX = parent.CFile("move.txt");
+        var fileY = parent.CDirectory("dest").CFile("move.txt");
+        Assert.IsFalse(await fileX.MoveTo(fileY));
+        Assert.IsFalse(await fileX.Exists());
+        await fileX.WriteAllText("hi"); // Create the file
+        Assert.IsTrue(await fileX.Exists());
+        Assert.AreEqual("hi", await fileX.ReadAllText());
+        Assert.IsFalse(await fileY.Exists());
+        Assert.IsTrue(await fileX.MoveTo(fileY));
+        Assert.IsFalse(await fileX.Exists());
+        Assert.IsTrue(await fileY.Exists());
+        Assert.AreEqual("hi", await fileY.ReadAllText());
+        await fileX.WriteAllText("overwrite");
+        Assert.IsFalse(await fileX.MoveTo(fileY, overWrite: false));
+        Assert.AreEqual("hi", await fileY.ReadAllText());
+        Assert.IsTrue(await fileX.MoveTo(fileY, overWrite: true));
         Assert.AreEqual("overwrite", await fileY.ReadAllText());
       }
     }

@@ -31,11 +31,11 @@ namespace FileUtility {
     }
 
     /// <summary>
-    /// Target should includes the file name.
+    /// Copy current file (if exists) to target.
     /// </summary>
     /// <returns>True if copied successfully, false if target file is exists while overWrite is false, and false if current file not exists</returns>
     public async Task<bool> CopyTo(AFile target, bool overWrite = true) {
-      if(await PathIfExist() is string fromPath) {
+      if(await PathIfExists() is string fromPath) {
         if(!overWrite && await target.Exists())
           return false; // Target already exists, and overWrite is false.
         if(!await target.Parent.Exists())
@@ -94,7 +94,7 @@ namespace FileUtility {
     }
 
     public override async Task Delete(bool recycleBin = false) {
-      if(await PathIfExist() is string path) {
+      if(await PathIfExists() is string path) {
         if(recycleBin) {
           await Util.RetryOperation(() => Task.Run(() => {
             const int ssfBITBUCKET = 0xa;
@@ -108,15 +108,26 @@ namespace FileUtility {
       }
     }
     /// <summary>
-    /// Move this file to the provided path. Full file name is included in the provided path.
+    /// Move this file to the provided file. 
     /// </summary>
-    /// <returns>True if moving done successfully. False otherwise.</returns>
-    public async Task<bool> MoveTo(AFile toFile) {
-      if(!await Exists()) return false;
-      if(await toFile.Exists())
-        await toFile.Delete(true);//if file exists in destination then remove it to recycle bin.
-      await FileAsync.Move(await Path(), await toFile.Path());
-      return true;
+    /// <returns>True if moving done successfully. False if this file (source) doesn't exist, and false if toFile (destination) already exists while overWrite is false.</returns>
+    public async Task<bool> MoveTo(AFile toFile, bool overWrite = true) {
+      if(await PathIfExists() is string fromPath) {
+        string toFilePathIfExists = await toFile.PathIfExists();
+        if(!overWrite && toFilePathIfExists is string)
+          return false; // Target already exists, and overWrite is false.
+
+        if(toFilePathIfExists == null && !await toFile.Parent.Exists())
+          await toFile.Parent.Create();
+
+        if(overWrite && toFilePathIfExists is string) {
+          await FileAsync.Delete(toFilePathIfExists); 
+          await FileAsync.Move(fromPath, toFilePathIfExists);
+        } else 
+          await FileAsync.Move(fromPath, await toFile.Path()); // toFilePathIfExists is null
+        return true;
+      }
+      return false;
     }
     /// <summary>
     /// Run the file if it exists, otherwise show an error dialog.
@@ -125,7 +136,7 @@ namespace FileUtility {
     /// <param name="args"></param>
     /// <returns>The Process object of the program. If file not found it returns null</returns>
     public async Task<Process> LaunchProgram(bool waitForExit, string args = null) {
-      if(await PathIfExist() is string path) {
+      if(await PathIfExists() is string path) {
 
         var p = new Process();
         p.StartInfo.FileName = path;// e.g "notepad.exe";
