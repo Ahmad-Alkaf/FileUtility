@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace FileUtility {
   /// <summary>
@@ -26,31 +28,30 @@ namespace FileUtility {
     /// targetPath should include the file name. If source file doesn't exist, NO exception will be thrown.
     /// </summary>
     /// <returns>True if this file exists and copied successfully, false otherwise</returns>
-    public async Task<bool> CopyTo(string targetPath, bool overWrite = true) {
-      return await CopyTo(AFile.FromFullPath(targetPath), overWrite);
+    public async Task CopyTo(string targetPath, bool overWrite = true) {
+      await CopyTo(AFile.FromFullPath(targetPath), overWrite);
     }
 
     /// <summary>
     /// Copy current file (if exists) to target.
     /// </summary>
     /// <returns>True if copied successfully, false if target file is exists while overWrite is false, and false if current file not exists</returns>
-    public async Task<bool> CopyTo(AFile target, bool overWrite = true) {
+    public async Task CopyTo(AFile target, bool overWrite = true) {
       if(await PathIfExists() is string fromPath) {
         if(!overWrite && await target.Exists())
-          return false; // Target already exists, and overWrite is false.
+          throw new FileLoadException("Target file already exists. overWrite is false. target=" + target.PathSync());
         if(!await target.Parent.Exists())
           await target.Parent.Create();
         await FileAsync.Copy(fromPath, await target.Path(), overWrite);
-        return true;
-      }
-      return false;
+      } else
+        throw new FileNotFoundException("Source file not found. source=" + PathSync());
     }
     /// <summary>
     /// 0 length if file not exists. It ignores empty lines.
     /// </summary>
     public async Task<string[]> ReadAllLines() {
-      if(await Exists())
-        return await FileAsync.ReadAllLines(await Path());
+      if(await PathIfExists() is string path)
+        return await FileAsync.ReadAllLines(path);
       return new string[] { };
     }
 
@@ -58,8 +59,17 @@ namespace FileUtility {
     /// Null if file not exists.
     /// </summary>
     public async Task<string> ReadAllText() {
-      if(await Exists())
-        return await FileAsync.ReadAllText(await Path());
+      if(await PathIfExists() is string path)
+        return await FileAsync.ReadAllText(path);
+      return null;
+    }
+
+    /// <summary>
+    /// Null if file not exists.
+    /// </summary>
+    public async Task<byte[]> ReadAllBytes() {
+      if(await PathIfExists() is string path)
+        return await FileAsync.ReadAllBytes(path);
       return null;
     }
 
@@ -71,6 +81,7 @@ namespace FileUtility {
         return File.ReadAllText(PathSync());
       return null;
     }
+
     /// <summary>
     /// Writing `null` or empty string, will create an empty file.
     /// </summary>
@@ -121,9 +132,9 @@ namespace FileUtility {
           await toFile.Parent.Create();
 
         if(overWrite && toFilePathIfExists is string) {
-          await FileAsync.Delete(toFilePathIfExists); 
+          await FileAsync.Delete(toFilePathIfExists);
           await FileAsync.Move(fromPath, toFilePathIfExists);
-        } else 
+        } else
           await FileAsync.Move(fromPath, await toFile.Path()); // toFilePathIfExists is null
         return true;
       }
@@ -137,7 +148,6 @@ namespace FileUtility {
     /// <returns>The Process object of the program. If file not found it returns null</returns>
     public async Task<Process> LaunchProgram(bool waitForExit, string args = null) {
       if(await PathIfExists() is string path) {
-
         var p = new Process();
         p.StartInfo.FileName = path;// e.g "notepad.exe";
         p.StartInfo.UseShellExecute = true;
@@ -152,5 +162,58 @@ namespace FileUtility {
     public Task<List<AFile>> ExistedPathAlias() => base.ExistedPathAlias<AFile>();
 
     public static AFile FromFullPath(string fullPath) => new AFile(fullPath);
+    ///<summary>
+    /// Creates a uniquely named, zero-byte temporary file on Temp directory provided by the OS.
+    ///</summary>
+    public static AFile GetTempFile() => FromFullPath(System.IO.Path.GetTempFileName());
+
+    /// <summary>
+    /// Update the file without any race condition errors that lead to lose of data integrity. 
+    /// Used for files that many processes may try to write/modify at the same time.
+    /// Not recommended if you want to read only access.
+    /// Uses File.Replace(); which is atomic on NTFS. So, no half-written files if suddenly crashed while writing.
+    /// </summary>
+    /// <param name="update">A function that its parameter is the latest file content in string. And it returns the new file content.
+    /// Function must takes less than 5 seconds to complete, this is why it's synchronize.
+    /// Param is Empty string if file not exists.</param>
+    /// <returns>New data to be written into the file</returns>
+    public Task ConcurrentUpdate(Func<string, string> update) {
+      return Util.RetryOperation(async () => {
+        FileStream fs = null;
+        try {
+          fs = new FileStream(
+                  await Path(),
+                  FileMode.OpenOrCreate,
+                  FileAccess.ReadWrite,
+                  FileShare.Read);
+
+          // Read through the same stream
+          StreamReader sr = null;
+          try {
+
+            sr = new StreamReader(fs, encoding: new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true), detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+            string content = sr.BaseStream.Length > 0
+                          ? sr.ReadToEnd()
+                          : "";
+            sr.Dispose();
+
+            string newContent = update(content);
+            if(newContent == null)
+              return;
+
+            // Re-wind and overwrite
+            fs.SetLength(0);
+            using(var sw = new StreamWriter(fs)) {
+              sw.Write(newContent);
+            }
+          } finally {
+            sr?.Dispose();
+          }
+        } finally {
+          fs?.Dispose();
+        }
+      }, 150, 50);
+
+    }
   }
 }

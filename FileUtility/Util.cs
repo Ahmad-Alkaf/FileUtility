@@ -16,16 +16,23 @@ namespace FileUtility {
     /// <param name="maxRetryCounter"></param>
     /// <param name="currentCounter"></param>
     /// <param name="lastException"></param>
-    public static async Task<T> RetryOperation<T>(Func<Task<T>> action, int maxRetryCounter = 10, int currentCounter = 0, Exception lastException = null) {
+    public static async Task<T> RetryOperation<T>(Func<Task<T>> action, int maxRetryCounter = 10, int delay = 50, int currentCounter = 0, Exception lastException = null) {
       if(maxRetryCounter < 0) {
-        throw new ArgumentOutOfRangeException(nameof(maxRetryCounter), "maxRetryCounter must be greater than 0");
+        throw new ArgumentOutOfRangeException(nameof(maxRetryCounter), "maxRetryCounter must be greater or equal to 0");
       }
+      if(delay <= 0) {
+        throw new ArgumentOutOfRangeException(nameof(delay), "delay must be greater than 0");
+      }
+      if(currentCounter < 0) {
+        throw new ArgumentOutOfRangeException(nameof(currentCounter), "currentCounter must be greater or equal to 0");
+      }
+
       if(maxRetryCounter >= currentCounter++) {
         try {
           return await action();
         } catch(Exception e) {
-          await Task.Delay(300);
-          return await RetryOperation(action, maxRetryCounter, currentCounter, e);
+          await Task.Delay(delay);
+          return await RetryOperation(action, maxRetryCounter, delay, currentCounter, e);
         }
       }
       throw lastException;
@@ -39,17 +46,23 @@ namespace FileUtility {
     /// <param name="maxRetryCounter"></param>
     /// <param name="currentCounter"></param>
     /// <param name="lastException"></param>
-    public static async Task RetryOperation(Func<Task> action, int maxRetryCounter = 10, int currentCounter = 0, Exception lastException = null) {
+    public static async Task RetryOperation(Func<Task> action, int maxRetryCounter = 10, int delay = 50, int currentCounter = 0, Exception lastException = null) {
 
       if(maxRetryCounter < 0) {
-        throw new ArgumentOutOfRangeException(nameof(maxRetryCounter), "maxRetryCounter must be greater than zero.");
+        throw new ArgumentOutOfRangeException(nameof(maxRetryCounter), "maxRetryCounter must be greater or equal to 0");
+      }
+      if(delay <= 0) {
+        throw new ArgumentOutOfRangeException(nameof(delay), "delay must be greater than 0");
+      }
+      if(currentCounter < 0) {
+        throw new ArgumentOutOfRangeException(nameof(currentCounter), "currentCounter must be greater or equal to 0");
       }
       if(maxRetryCounter >= currentCounter++) {
         try {
           await action();
         } catch(Exception e) {
-          await Task.Delay(300);
-          await RetryOperation(action, maxRetryCounter, currentCounter, e);
+          await Task.Delay(delay);
+          await RetryOperation(action, maxRetryCounter, delay, currentCounter, e);
         }
       } else
         throw lastException;

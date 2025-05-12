@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using FileUtility;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -46,24 +48,24 @@ namespace UnitTestFileUtility {
         var parent = ADirectory.FromFullPath(act.CreateEmptyDirectory());
         var fileX = parent.CFile("copy.txt");
         var fileY = parent.CDirectory("dest").CFile("copy.txt");
-        Assert.IsFalse(await fileX.CopyTo(fileY));
         Assert.IsFalse(await fileX.Exists());
         Assert.IsFalse(fileX.ExistsSync());
+        await Assert.ThrowsExceptionAsync<FileNotFoundException>(async () => await fileX.CopyTo(fileY, overWrite: true));
         await fileX.WriteAllText("hi");
         Assert.IsTrue(await fileX.Exists());
         Assert.AreEqual("hi", await fileX.ReadAllText());
         Assert.AreEqual("hi", fileX.ReadAllTextSync());
         Assert.IsFalse(await fileY.Exists());
-        Assert.IsTrue(await fileX.CopyTo(fileY));
+        await fileX.CopyTo(fileY);
         Assert.IsTrue(await fileY.Exists());
         Assert.IsTrue(await fileX.Exists());
         Assert.IsTrue(fileY.ExistsSync());
         Assert.IsTrue(fileX.ExistsSync());
         Assert.AreEqual("hi", await fileY.ReadAllText());
         await fileX.WriteAllText("overwrite");
-        Assert.IsFalse(await fileX.CopyTo(fileY, overWrite: false));
+        await Assert.ThrowsExceptionAsync<FileLoadException>(async () => await fileX.CopyTo(fileY, overWrite: false));
         Assert.AreEqual("hi", await fileY.ReadAllText());
-        Assert.IsTrue(await fileX.CopyTo(fileY, overWrite: true));
+        await fileX.CopyTo(fileY, overWrite: true);
         Assert.AreEqual("overwrite", await fileY.ReadAllText());
       }
     }
@@ -102,6 +104,9 @@ namespace UnitTestFileUtility {
         Assert.AreEqual(null, file.ReadAllTextSync());
         Assert.AreEqual(null, await file.ReadAllText());
         Assert.AreEqual(0, (await file.ReadAllLines()).Count());
+        Assert.AreEqual("readWrite.txt", file.Name);
+        Assert.AreEqual("readWrite.txt", file.ExactNameSync());
+        Assert.AreEqual("readWrite.txt", await file.ExactName());
 
         await file.WriteAllText(null);
         Assert.IsTrue(parent.ExistsSync());
@@ -171,11 +176,20 @@ namespace UnitTestFileUtility {
 
         await parent.Parent.Parent.Delete();
         Assert.IsFalse(await file.Exists());
-        await file.WriteAllLines(new string[] {});
+        Assert.IsNull(await file.ReadAllText());
+        Assert.IsNull(file.ReadAllTextSync());
+
+        await file.WriteAllLines(new string[] { });
         Assert.IsTrue(await parent.Exists());
         Assert.AreEqual("", file.ReadAllTextSync());
         Assert.AreEqual("", await file.ReadAllText());
         Assert.AreEqual(0, (await file.ReadAllLines()).Count());
+        Assert.AreEqual(0, (await file.ReadAllBytes()).Length);
+
+        await file.Delete();
+        Assert.IsNull(await file.ReadAllBytes());
+        await file.WriteAllText("hi");
+        Assert.AreEqual(2, (await file.ReadAllBytes()).Length);
       }
     }
     [TestMethod]
@@ -208,12 +222,25 @@ namespace UnitTestFileUtility {
         await file.WriteAllText("");
         Assert.IsTrue(await file.Exists());
         file = parent.CFile(new string[] { "existedAlias.txt", "existedaliasalias.txt" });
+        Assert.AreEqual("existedAlias.txt", file.Alias[0]);
+        Assert.AreEqual("existedaliasalias.txt", file.Alias[1]);
         await file.WriteAllText("");
         Assert.IsTrue(await file.Exists());
+        Assert.AreEqual("existedAlias.txt", file.Name);
+        Assert.AreEqual("existedAlias.txt", file.Alias[0]);
+        Assert.AreEqual("existedaliasalias.txt", file.Alias[1]);
+        Assert.AreEqual("existedAlias.txt", file.ExactNameSync());
+        Assert.AreEqual("existedAlias.txt", await file.ExactName());
         await file.Delete();
         Assert.IsFalse(await file.Exists());
         await parent.CFile("existedaliasalias.txt").WriteAllText("");
         Assert.IsTrue(await file.Exists());
+        Assert.AreEqual("existedAlias.txt", file.Name);
+        Assert.AreEqual("existedAlias.txt", file.Alias[0]);
+        Assert.AreEqual("existedaliasalias.txt", file.Alias[1]);
+        Assert.AreEqual("existedaliasalias.txt", file.ExactNameSync());
+        Assert.AreEqual("existedaliasalias.txt", await file.ExactName());
+
         var existedAlias = (await file.ExistedPathAlias());
         Assert.IsTrue(existedAlias.Count == 1);
         Assert.AreEqual(existedAlias[0], file);
@@ -229,7 +256,32 @@ namespace UnitTestFileUtility {
         await file.WriteAllText("");
         existedAlias = await file.ExistedPathAlias();
         Assert.IsTrue(existedAlias.Count == 2);
-        
+
+      }
+    }
+    [TestMethod]
+    public async Task UpdateConcurrent() {
+      using(var act = new Act()) {
+        ADirectory dir = ADirectory.FromFullPath(act.CreateEmptyDirectory("update-concurrent"));
+        Func<string, string> updateFunc = (n) => {
+          if(string.IsNullOrEmpty(n)) {
+            return "1";
+          } else if(int.TryParse(n, out int intNum))
+            return (++intNum).ToString();
+          else Assert.Fail("concurrent.txt file contains unexpected content: " + n);
+          return "";
+        };
+        var tasks = new List<Task>();
+        for(int i = 0;i < 10000;i++) {
+          tasks.Add(Task.Run(async () => {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            await dir.CFile("concurrent.txt").ConcurrentUpdate(updateFunc);
+            watch.Stop();
+            var elapsedMs = watch.ElapsedMilliseconds;
+            Console.WriteLine("Concurrent operation took " + elapsedMs + "ms");
+          }));
+        }
+        await Task.WhenAll(tasks);
       }
     }
 

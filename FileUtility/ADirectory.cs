@@ -129,18 +129,17 @@ namespace FileUtility {
     }
 
     /// <summary>
-    /// Launch Explorer to current directory if exist. Otherwise show an error dialog.
+    /// Launch Explorer to the current directory. 
     /// </summary>
-    /// <returns>True if launched succeeded. False otherwise.</returns>
-    public async Task<bool> LaunchExplorer() {
+    public async Task LaunchExplorer() {
       if(await PathIfExists() is string path) {
         var p = new Process();
-        p.StartInfo.FileName = "explorer.exe";// e.g "notepad.exe";
+        p.StartInfo.FileName = "explorer.exe";
         p.StartInfo.UseShellExecute = true;
         p.StartInfo.Arguments = path;
         p.Start();
-      }
-      throw new FileNotFoundException("Directory path not found; to be opened", await Path());
+      } else
+        throw new FileNotFoundException("Directory path not found to be opened", await Path());
     }
 
     /// <summary>

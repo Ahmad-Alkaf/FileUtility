@@ -16,6 +16,8 @@ namespace UnitTestFileUtility {
     public async Task retryOperation() {
       await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(() => Util.RetryOperation(() => Task.CompletedTask, -1));
       await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(() => Util.RetryOperation(() => Task.FromResult(true), -1));
+      await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(() => Util.RetryOperation(() => Task.FromResult(true), 1,-1));
+      await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(() => Util.RetryOperation(() => Task.FromResult(true), 1,1,-1));
 
       counter = 0;
       Assert.IsTrue(await Util.RetryOperation(() => Task.Run(() => {
