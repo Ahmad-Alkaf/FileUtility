@@ -92,6 +92,11 @@ namespace FileUtility {
           await DirectoryAsync.Delete(path, true);
       }
     }
+    public override void DeleteSync() {
+      if(PathIfExistsSync() is string path) {
+        Directory.Delete(path, true);
+      }
+    }
     /// <summary>
     /// Concatenate the file to current directory.
     /// Ex: ADirectory="...Desktop/TechTroniX".CFile("Restore Point.png") => CFile="...Desktop/TechTroniX/Restore Point.png"

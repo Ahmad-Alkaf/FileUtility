@@ -118,6 +118,11 @@ namespace FileUtility {
           await FileAsync.Delete(path);
       }
     }
+    public override void DeleteSync() {
+      if(PathIfExistsSync() is string path) {
+        File.Delete(path);
+      }
+    }
     /// <summary>
     /// Move this file to the provided file. 
     /// </summary>

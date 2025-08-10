@@ -86,6 +86,13 @@ namespace FileUtility {
       }
       return null;
     });
+    public string PathIfExistsSync() {
+      foreach(string path in PathsSync(this)) {
+        if(this is AFile ? File.Exists(path) : Directory.Exists(path))
+          return path;
+      }
+      return null;
+    }
     /// <summary>
     /// Array of all possible paths for each AFileDirectory alias and its parent aliases until the root directory.
     /// Ex: if directory "C:\Users\TechTroniX" has alias "C:\Users\Public" 
@@ -109,6 +116,17 @@ namespace FileUtility {
         paths.AddRange(f.Alias);
       return paths;
     });
+    private List<string> PathsSync(AFileDirectory f) {
+      List<string> paths = new List<string>();
+      if(f.Parent != null) {
+        foreach(var p in PathsSync(f.Parent))
+          foreach(var a in f.Alias)
+            if(f is AFile ? File.Exists(System.IO.Path.Combine(p, a)) : Directory.Exists(System.IO.Path.Combine(p, a)))
+              paths.Add(System.IO.Path.Combine(p, a));
+      } else
+        paths.AddRange(f.Alias);
+      return paths;
+    }
     //public Task<List<string>> Existed()
     /// <summary>
     /// All alias paths that are currently existed.
@@ -135,6 +153,7 @@ namespace FileUtility {
     /// Delete a file or directory.
     /// </summary>
     public abstract Task Delete(bool recycleBin = false);
+    public abstract void DeleteSync();
 
     /// <returns>True if File/Directory is a system file/directory. False otherwise</returns>
     public bool IsSystem() {
@@ -152,7 +171,7 @@ namespace FileUtility {
           && (
           (Parent is AFileDirectory && o.Parent is AFileDirectory
           && (Parent == o.Parent || Parent.Alias.Contains(o.Parent.Name) || o.Parent.Alias.Contains(Parent.Name))
-          ) 
+          )
           || (Parent == null && o.Parent == null)
           );
     }

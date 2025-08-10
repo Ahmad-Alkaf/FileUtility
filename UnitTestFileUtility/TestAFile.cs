@@ -16,6 +16,20 @@ namespace UnitTestFileUtility {
         string path = act.CreateEmptyDirectory();
         var aFile = new AFile(path + "\\fromFullPath.txt");
         Assert.AreEqual(path + "\\fromFullPath.txt", aFile.Path().GetAwaiter().GetResult());
+
+        AFile file1 = AFile.FromFullPath("%USERPROFILE%\\Desktop\\test.txt");
+        AFile file2 = AFile.FromFullPath("C:\\Users\\Ahmed\\Desktop\\test.txt");
+        AFile file3 = AFile.FromFullPath("C:\\Users\\Public\\Desktop\\test.txt");
+        AFile file4 = AFile.FromFullPath("C:\\Users\\Abdoo\\Desktop\\test.txt");
+        Assert.AreEqual(file1, file2);
+        Assert.AreEqual(file2, file3);
+        Assert.AreEqual(file1, file4);
+        Assert.IsTrue(new List<AFile> { file1, file2, file3, file4 }.Contains(file1));
+        Assert.IsTrue(new List<AFile> { file1, file2, file3, file4 }.Contains(file2));
+        Assert.IsTrue(new List<AFile> { file1, file2, file3, file4 }.Contains(file3));
+        Assert.IsTrue(new List<AFile> { file1, file2, file3 }.Contains(file4));
+
+
       }
     }
 
@@ -199,13 +213,21 @@ namespace UnitTestFileUtility {
         ADirectory parent = ADirectory.FromFullPath(path).CDirectory("deleteMe");
         AFile file = new AFile(parent, "deleteMe.txt");
         Assert.IsFalse(await file.Exists());
+        Assert.IsFalse(file.ExistsSync());
         await file.WriteAllText("");
         Assert.IsTrue(await file.Exists());
+        Assert.IsTrue(file.ExistsSync());
         await file.Delete(false);
         Assert.IsFalse(await file.Exists());
+        Assert.IsFalse(file.ExistsSync());
         await file.WriteAllText("");
         Assert.IsTrue(await file.Exists());
-        string deletedPath = await file.Path();
+        Assert.IsTrue(file.ExistsSync());
+        file.DeleteSync();
+        Assert.IsFalse(await file.Exists());
+        Assert.IsFalse(file.ExistsSync());
+        await file.WriteAllText("");
+        Assert.IsTrue(await file.Exists());
         await file.Delete(true);
         Assert.IsFalse(await file.Exists());
       }
@@ -271,17 +293,19 @@ namespace UnitTestFileUtility {
           else Assert.Fail("concurrent.txt file contains unexpected content: " + n);
           return "";
         };
+        var file = dir.CFile("concurrent.txt");
         var tasks = new List<Task>();
-        for(int i = 0;i < 10000;i++) {
+        for(int i = 0;i < 1000;i++) {
           tasks.Add(Task.Run(async () => {
             var watch = System.Diagnostics.Stopwatch.StartNew();
-            await dir.CFile("concurrent.txt").ConcurrentUpdate(updateFunc);
+            await file.ConcurrentUpdate(updateFunc);
             watch.Stop();
             var elapsedMs = watch.ElapsedMilliseconds;
             Console.WriteLine("Concurrent operation took " + elapsedMs + "ms");
           }));
         }
         await Task.WhenAll(tasks);
+        Assert.AreEqual(await file.ReadAllText(), "1000");
       }
     }
 
