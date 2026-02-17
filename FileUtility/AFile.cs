@@ -173,10 +173,22 @@ namespace FileUtility {
     public static AFile GetTempFile() => FromFullPath(System.IO.Path.GetTempFileName());
 
     /// <summary>
+    /// Append text to the file. Creates the file and parent directory if they don't exist.
+    /// Uses FileMode.Append with FileShare.ReadWrite, allowing concurrent appenders
+    /// without exclusive locking. Ideal for log files.
+    /// </summary>
+    public async Task AppendText(string text) {
+      if(!await Parent.Exists())
+        await Parent.Create();
+      await FileAsync.AppendText(await Path(), text);
+    }
+
+    /// <summary>
     /// Update the file without any race condition errors that lead to lose of data integrity. 
     /// Used for files that many processes may try to write/modify at the same time.
     /// Not recommended if you want to read only access.
-    /// Uses File.Replace(); which is atomic on NTFS. So, no half-written files if suddenly crashed while writing.
+    /// Writes new content to a temp file first, then atomically replaces the original.
+    /// This prevents half-written/corrupted files on crash or network failure.
     /// </summary>
     /// <param name="update">A function that its parameter is the latest file content in string. And it returns the new file content.
     /// Function must takes less than 5 seconds to complete, this is why it's synchronize.
@@ -184,10 +196,11 @@ namespace FileUtility {
     /// <returns>New data to be written into the file</returns>
     public Task ConcurrentUpdate(Func<string, string> update) {
       return Util.RetryOperation(async () => {
+        string filePath = await Path();
         FileStream fs = null;
         try {
           fs = new FileStream(
-                  await Path(),
+                  filePath,
                   FileMode.OpenOrCreate,
                   FileAccess.ReadWrite,
                   FileShare.Read);
@@ -206,10 +219,32 @@ namespace FileUtility {
             if(newContent == null)
               return;
 
-            // Re-wind and overwrite
-            fs.SetLength(0);
-            using(var sw = new StreamWriter(fs)) {
-              sw.Write(newContent);
+            // Write to a temp file first, then replace atomically.
+            // This prevents corruption if the process crashes or the network drops mid-write.
+            string tempPath = filePath + "." + Guid.NewGuid().ToString("N").Substring(0, 8) + ".tmp";
+            try {
+              File.WriteAllText(tempPath, newContent, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+              // Release the lock on the original file before replacing
+              fs.Dispose();
+              fs = null;
+              // File.Replace is atomic on NTFS. On SMB it's still safer than SetLength(0)+Write.
+              // It also creates a backup which we clean up immediately.
+              string backupPath = filePath + ".bak";
+              try {
+                File.Replace(tempPath, filePath, backupPath);
+                try { File.Delete(backupPath); } catch { }
+              } catch(FileNotFoundException) {
+                // Original file was deleted between read and replace — just move temp into place
+                File.Move(tempPath, filePath);
+              } catch(IOException) {
+                // File.Replace may fail on some SMB shares — fall back to Move
+                try { File.Delete(filePath); } catch { }
+                File.Move(tempPath, filePath);
+              }
+            } catch {
+              // Clean up temp file on any failure
+              try { File.Delete(tempPath); } catch { }
+              throw;
             }
           } finally {
             sr?.Dispose();

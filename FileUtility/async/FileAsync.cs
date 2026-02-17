@@ -68,5 +68,18 @@ namespace FileUtility {
     public static async Task<byte[]> ReadAllBytes(string path) {
       return await Util.RetryOperation(() => Task.Run(() => File.ReadAllBytes(path)));
     }
+    /// <summary>
+    /// Append text to a file using FileMode.Append with FileShare.ReadWrite.
+    /// This allows concurrent appenders without exclusive locking, making it
+    /// ideal for log files where multiple threads/processes write simultaneously.
+    /// </summary>
+    public static async Task AppendText(string path, string text) {
+      await Util.RetryOperation(() => Task.Run(() => {
+        using(FileStream fileStream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) {
+          byte[] bytes = new UTF8Encoding(true).GetBytes(text ?? "");
+          fileStream.Write(bytes, 0, bytes.Length);
+        }
+      }));
+    }
   }
 }
